@@ -4,16 +4,16 @@
 \alias{tm_lines}
 \title{Draw spatial lines}
 \usage{
-tm_lines(col = "red", lwd = 1, lty = "solid", alpha = NA, scale = 1,
+tm_lines(col = NA, lwd = 1, lty = "solid", alpha = NA, scale = 1,
   lwd.legend = NULL, lwd.legend.labels = NULL, n = 5,
   style = ifelse(is.null(breaks), "pretty", "fixed"), breaks = NULL,
   palette = NULL, labels = NULL, auto.palette.mapping = TRUE,
-  contrast = 1, max.categories = 12, colorNA = "grey65",
-  textNA = "Missing", title.col = NA, title.lwd = NA,
-  legend.format = list(), legend.col.is.portrait = TRUE,
-  legend.lwd.is.portrait = FALSE, legend.hist = FALSE,
-  legend.hist.title = NA, legend.col.z = NA, legend.lwd.z = NA,
-  legend.hist.z = NA, id = NA)
+  contrast = 1, max.categories = 12, colorNA = NA, textNA = "Missing",
+  title.col = NA, title.lwd = NA, legend.col.show = TRUE,
+  legend.lwd.show = TRUE, legend.format = list(),
+  legend.col.is.portrait = TRUE, legend.lwd.is.portrait = FALSE,
+  legend.hist = FALSE, legend.hist.title = NA, legend.col.z = NA,
+  legend.lwd.z = NA, legend.hist.z = NA, id = NA)
 }
 \arguments{
 \item{col}{color of the lines. Either a color value or a data variable name. If multiple values are specified, small multiples are drawn (see details).}
@@ -36,7 +36,7 @@ tm_lines(col = "red", lwd = 1, lty = "solid", alpha = NA, scale = 1,
 
 \item{breaks}{in case \code{style=="fixed"}, breaks should be specified}
 
-\item{palette}{color palette (see \code{RColorBrewer::display.brewer.all}) for the lines. Only when \code{col} is set to a variable.}
+\item{palette}{color palette (see \code{RColorBrewer::display.brewer.all}) for the lines. Only when \code{col} is set to a variable. The default palette is taken from \code{\link{tm_layout}}'s argument \code{aes.palette}.}
 
 \item{labels}{labels of the classes}
 
@@ -53,6 +53,10 @@ tm_lines(col = "red", lwd = 1, lty = "solid", alpha = NA, scale = 1,
 \item{title.col}{title of the legend element regarding the line colors}
 
 \item{title.lwd}{title of the legend element regarding the line widths}
+
+\item{legend.col.show}{logical that determines whether the legend for the line colors is shown}
+
+\item{legend.lwd.show}{logical that determines whether the legend for the line widths is shown}
 
 \item{legend.format}{list of formatting options for the legend numbers. Only applicable if \code{labels} is undefined. Parameters are:
 \describe{

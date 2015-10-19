@@ -6,19 +6,19 @@
 \alias{tm_polygons}
 \title{Draw polygons}
 \usage{
-tm_fill(col = "grey85", alpha = NA, palette = NULL,
-  convert2density = FALSE, area = NULL, n = 5,
-  style = ifelse(is.null(breaks), "pretty", "fixed"), breaks = NULL,
-  labels = NULL, auto.palette.mapping = TRUE, contrast = 1,
-  max.categories = 12, colorNA = "grey60", textNA = "Missing",
-  thres.poly = 1e-05, title = NA, legend.format = list(),
-  legend.is.portrait = TRUE, legend.hist = FALSE, legend.hist.title = NA,
-  legend.z = NA, legend.hist.z = NA, id = NA, ...)
+tm_fill(col = NA, alpha = NA, palette = NULL, convert2density = FALSE,
+  area = NULL, n = 5, style = ifelse(is.null(breaks), "pretty", "fixed"),
+  breaks = NULL, labels = NULL, auto.palette.mapping = TRUE,
+  contrast = 1, max.categories = 12, colorNA = NA, textNA = "Missing",
+  thres.poly = 1e-05, title = NA, legend.show = TRUE,
+  legend.format = list(), legend.is.portrait = TRUE, legend.hist = FALSE,
+  legend.hist.title = NA, legend.z = NA, legend.hist.z = NA, id = NA,
+  ...)
 
-tm_borders(col = "grey40", lwd = 1, lty = "solid", alpha = NA)
+tm_borders(col = NA, lwd = 1, lty = "solid", alpha = NA)
 
-tm_polygons(col = "grey85", alpha = NA, border.col = "grey40",
-  border.alpha = NA, ...)
+tm_polygons(col = NA, alpha = NA, border.col = NA, border.alpha = NA,
+  ...)
 }
 \arguments{
 \item{col}{For \code{tm_fill}, it is one of
@@ -29,7 +29,7 @@ For \code{tm_borders}, it is a single color value that specifies the border line
 
 \item{alpha}{transparency number between 0 (totally transparent) and 1 (not transparent). By default, the alpha value of the \code{col} is used (normally 1).}
 
-\item{palette}{a palette name or a vector of colors. See \code{RColorBrewer::display.brewer.all()} for the named palette. Use a \code{"-"} as prefix to reverse the palette. By default, \code{"RdYlGn"} is taken for numeric variables, \code{"Dark2"} for categorical variables, and \code{"Set2"} for \code{col="MAP_COLORING"}.}
+\item{palette}{a palette name or a vector of colors. See \code{RColorBrewer::display.brewer.all()} for the named palette. Use a \code{"-"} as prefix to reverse the palette. The default palette is taken from \code{\link{tm_layout}}'s argument \code{aes.palette}.}
 
 \item{convert2density}{boolean that determines whether \code{col} is converted to a density variable. Should be \code{TRUE} when \code{col} consists of absolute numbers. The area size is either approximated from the shape object, or given by the argument \code{area}.}
 
@@ -56,6 +56,8 @@ For \code{tm_borders}, it is a single color value that specifies the border line
 \item{thres.poly}{number that specifies the threshold at which polygons are taken into account. The number itself corresponds to the proportion of the area sizes of the polygons to the total polygon size.}
 
 \item{title}{title of the legend element}
+
+\item{legend.show}{logical that determines whether the legend is shown}
 
 \item{legend.format}{list of formatting options for the legend numbers. Only applicable if \code{labels} is undefined. Parameters are:
 \describe{

@@ -13,9 +13,13 @@
 #' @param shadow logical that determines whether a shadow is depicted behind the text. The color of the shadow is either white or yellow, depending of the \code{fontcolor}.
 #' @param bg.color background color of the text labels. By default, \code{bg.color=NA}, so no background is drawn.
 #' @param bg.alpha number between 0 and 1 that specifies the transparancy of the text background (0 is totally transparent, 1 is solid background).
-#' @param size.lowerbound lowerbound for \code{size}. Only useful when \code{size} is not a constant. If \code{print.tiny} is \code{TRUE}, then all text labels which relative text is smaller than \code{size.lowerbound} are depicted at relative size \code{size.lowerbound}. If \code{print.tiny} is \code{FALSE}, then text labels are only depicted if their relative sizes are at least \code{size.lowerbound} (in other words, tiny labels are omitted).
+#' @param size.lowerbound lowerbound for \code{size}. Only applicable when \code{size} is not a constant. If \code{print.tiny} is \code{TRUE}, then all text labels which relative text is smaller than \code{size.lowerbound} are depicted at relative size \code{size.lowerbound}. If \code{print.tiny} is \code{FALSE}, then text labels are only depicted if their relative sizes are at least \code{size.lowerbound} (in other words, tiny labels are omitted).
 #' @param print.tiny boolean, see \code{size.lowerbound}
 #' @param scale text size multiplier, useful in case \code{size} is variable or \code{"AREA"}.
+#' @param auto.placement logical that determines whether the labels are placed automatically to prevent overlap. The simulated annealing algorithm is used for that.
+#' @param remove.overlap logical that determines whether the overlapping labels are removed
+#' @param along.lines logical that determines whether labels are rotated along the spatial lines. Only applicabel if a spatial lines shape is used.
+#' @param overwrite.lines logical that determines whether the part of the lines below the text labels is removed. Only applicabel if a spatial lines shape is used.
 #' @param xmod horizontal position modification of the text (relatively): 0 means no modification, and 1 corresponds to the height of one line of text. Either a single number for all polygons, or a numeric variable in the shape data specifying a number for each polygon. Together with \code{ymod}, it determines position modification of the text labels. In most coordinate systems (projections), the origin is located at the bottom left, so negative \code{xmod} move the text to the left, and negative \code{ymod} values to the bottom.
 #' @param ymod vertical position modification. See xmod.
 #' @note The absolute fontsize (in points) is determined by the (ROOT) viewport, which may depend on the graphics device.
@@ -23,13 +27,21 @@
 #' @example ../examples/tm_text.R
 #' @seealso \href{../doc/tmap-nutshell.html}{\code{vignette("tmap-nutshell")}}
 #' @return \code{\link{tmap-element}}
-tm_text <-  function(text, size=1, root=3, fontcolor=NA, fontface=NA, fontfamily=NA, alpha=NA, case=NA, shadow=FALSE, bg.color=NA, bg.alpha=NA, size.lowerbound=.4, print.tiny=FALSE, scale=1, xmod=0, ymod=0) {
+tm_text <-  function(text, size=1, root=3, fontcolor=NA, fontface=NA, fontfamily=NA, alpha=NA, case=NA, shadow=FALSE, bg.color=NA, bg.alpha=NA, size.lowerbound=.4, print.tiny=FALSE, scale=1, auto.placement=FALSE, remove.overlap=FALSE, along.lines=FALSE, overwrite.lines=FALSE, xmod=0, ymod=0) {
 	g <- list(tm_text=list(text=text, text.size=size, root=root, text.fontcolor=fontcolor, text.fontface=fontface, text.fontfamily=fontfamily, text.alpha=alpha, text.case=case, text.shadow=shadow, text.bg.color=bg.color, text.bg.alpha=bg.alpha,
-							text.size.lowerbound=size.lowerbound, text.print.tiny=print.tiny, text.scale=scale, text.xmod=xmod, text.ymod=ymod))
+							text.size.lowerbound=size.lowerbound, text.print.tiny=print.tiny, text.scale=scale, text.auto.placement=auto.placement, text.remove.overlap=remove.overlap, text.along.lines=along.lines, text.overwrite.lines=overwrite.lines, text.xmod=xmod, text.ymod=ymod))
 	class(g) <- "tmap"
 	g
 }
 
+tm_iso <- function(col="black", text="level", size=.5, auto.placement=FALSE,
+				   remove.overlap=TRUE, along.lines=TRUE, overwrite.lines=TRUE, ...) {
+	tm_lines(col=col) +
+		tm_text(text=text, size=size, auto.placement = auto.placement, 
+				remove.overlap=remove.overlap,
+				along.lines=along.lines,
+				overwrite.lines = overwrite.lines)
+}
 
 #' Draw spatial lines
 #' 
@@ -47,7 +59,7 @@ tm_text <-  function(text, size=1, root=3, fontcolor=NA, fontface=NA, fontfamily
 #' @param n preferred number of color scale classes. Only applicable when \code{lwd} is the name of a numeric variable.
 #' @param style method to cut the color scale: e.g. "fixed", "equal", "pretty", "quantile", or "kmeans". See the details in \code{\link[classInt:classIntervals]{classIntervals}}. Only applicable when \code{lwd} is the name of a numeric variable.
 #' @param breaks in case \code{style=="fixed"}, breaks should be specified
-#' @param palette color palette (see \code{RColorBrewer::display.brewer.all}) for the lines. Only when \code{col} is set to a variable.
+#' @param palette color palette (see \code{RColorBrewer::display.brewer.all}) for the lines. Only when \code{col} is set to a variable. The default palette is taken from \code{\link{tm_layout}}'s argument \code{aes.palette}.
 #' @param labels labels of the classes
 #' @param auto.palette.mapping When diverging colour palettes are used (i.e. "RdBu") this method automatically maps colors to values such that the middle colors (mostly white or yellow) are assigned to values of 0, and the two sides of the color palette are assigned to negative respectively positive values. In this case of line widths, obviously only the positive side is used. 
 #' @param contrast vector of two numbers that determine the range that is used for sequential and diverging palettes (applicable when \code{auto.palette.mapping=TRUE}). Both numbers should be between 0 and 1. The first number determines where the palette begins, and the second number where it ends. For sequential palettes, 0 means the brightest color, and 1 the darkest color. For diverging palettes, 0 means the middle color, and 1 both extremes. If only one number is provided, this number is interpreted as the endpoint (with 0 taken as the start).
@@ -56,6 +68,8 @@ tm_text <-  function(text, size=1, root=3, fontcolor=NA, fontface=NA, fontfamily
 #' @param textNA text used for missing values. Use \code{NA} to omit text for missing values in the legend
 #' @param title.col title of the legend element regarding the line colors
 #' @param title.lwd title of the legend element regarding the line widths
+#' @param legend.col.show logical that determines whether the legend for the line colors is shown
+#' @param legend.lwd.show logical that determines whether the legend for the line widths is shown
 #' @param legend.format list of formatting options for the legend numbers. Only applicable if \code{labels} is undefined. Parameters are:
 #' \describe{
 #' \item{scientific}{Should the labels be formatted scientically? If so, square brackets are used, and the \code{format} of the numbers is \code{"g"}. Otherwise, \code{format="f"}, and \code{text.separator}, \code{text.less.than}, and \code{text.or.more} are used. Also, the numbers are automatically  rounded to millions or billions if applicable.}
@@ -78,7 +92,7 @@ tm_text <-  function(text, size=1, root=3, fontcolor=NA, fontface=NA, fontfamily
 #' @seealso \href{../doc/tmap-nutshell.html}{\code{vignette("tmap-nutshell")}}
 #' @example ../examples/tm_lines.R
 #' @return \code{\link{tmap-element}}
-tm_lines <- function(col="red", lwd=1, lty="solid", alpha=NA,
+tm_lines <- function(col=NA, lwd=1, lty="solid", alpha=NA,
 					  scale=1,
 					  lwd.legend = NULL,
 					  lwd.legend.labels = NULL,
@@ -89,7 +103,7 @@ tm_lines <- function(col="red", lwd=1, lty="solid", alpha=NA,
 					  auto.palette.mapping = TRUE,
 					  contrast = 1,
 					  max.categories = 12, 
-					  colorNA = "grey65",
+					  colorNA = NA,
 					  textNA = "Missing",
 					 title.col=NA,
 					 title.lwd=NA,
@@ -120,6 +134,13 @@ tm_lines <- function(col="red", lwd=1, lty="solid", alpha=NA,
 }
 
 
+# tm_iso <- function(col="black",
+# 				   lwd=1,
+# 				   lty="solid",
+# 				   alpha=NA,
+# 				   )
+
+
 #' Draw polygons
 #' 
 #' Creates a \code{\link{tmap-element}} that draws the polygons. \code{tm_fill} fills the polygons. Either a fixed color is used, or a color palette is mapped to a data variable. By default, a divering color palette is used for numeric variables and a qualitative palette for categorical variables. \code{tm_borders} draws the borders of the polygons. \code{tm_polygons} fills the polygons and draws the polygon borders.
@@ -134,7 +155,7 @@ tm_lines <- function(col="red", lwd=1, lty="solid", alpha=NA,
 #' \item the name of a data variable that is contained in \code{shp}. Either the data variable contains color values, or values (numeric or categorical) that will be depicted by a color palette (see \code{palette}. In the latter case, a choropleth is drawn. #' \item \code{"MAP_COLORING"}. In this case polygons will be colored such that adjacent polygons do not get the same color. See the underlying function \code{\link{map_coloring}} for details.}
 #' For \code{tm_borders}, it is a single color value that specifies the border line color. If multiple values are specified, small multiples are drawn (see details).
 #' @param alpha transparency number between 0 (totally transparent) and 1 (not transparent). By default, the alpha value of the \code{col} is used (normally 1).
-#' @param palette a palette name or a vector of colors. See \code{RColorBrewer::display.brewer.all()} for the named palette. Use a \code{"-"} as prefix to reverse the palette. By default, \code{"RdYlGn"} is taken for numeric variables, \code{"Dark2"} for categorical variables, and \code{"Set2"} for \code{col="MAP_COLORING"}.
+#' @param palette a palette name or a vector of colors. See \code{RColorBrewer::display.brewer.all()} for the named palette. Use a \code{"-"} as prefix to reverse the palette. The default palette is taken from \code{\link{tm_layout}}'s argument \code{aes.palette}.
 #' @param convert2density boolean that determines whether \code{col} is converted to a density variable. Should be \code{TRUE} when \code{col} consists of absolute numbers. The area size is either approximated from the shape object, or given by the argument \code{area}.
 #' @param area Name of the data variable that contains the area sizes in squared kilometer.
 #' @param n preferred number of classes (in case \code{col} is a numeric variable).
@@ -148,6 +169,7 @@ tm_lines <- function(col="red", lwd=1, lty="solid", alpha=NA,
 #' @param textNA text used for missing values. Use \code{NA} to omit text for missing values in the legend
 #' @param thres.poly number that specifies the threshold at which polygons are taken into account. The number itself corresponds to the proportion of the area sizes of the polygons to the total polygon size. 
 #' @param title title of the legend element
+#' @param legend.show logical that determines whether the legend is shown
 #' @param legend.format list of formatting options for the legend numbers. Only applicable if \code{labels} is undefined. Parameters are:
 #' \describe{
 #' \item{scientific}{Should the labels be formatted scientically? If so, square brackets are used, and the \code{format} of the numbers is \code{"g"}. Otherwise, \code{format="f"}, and \code{text.separator}, \code{text.less.than}, and \code{text.or.more} are used. Also, the numbers are automatically  rounded to millions or billions if applicable.}
@@ -170,7 +192,7 @@ tm_lines <- function(col="red", lwd=1, lty="solid", alpha=NA,
 #' @example ../examples/tm_fill.R
 #' @seealso \href{../doc/tmap-nutshell.html}{\code{vignette("tmap-nutshell")}}
 #' @return \code{\link{tmap-element}}	
-tm_fill <- function(col="grey85", 
+tm_fill <- function(col=NA, 
 					alpha=NA,
 				    palette = NULL,
 				    convert2density = FALSE,
@@ -182,7 +204,7 @@ tm_fill <- function(col="grey85",
 					auto.palette.mapping = TRUE,
 					contrast = 1,
 			 		max.categories = 12,
-			 		colorNA = "grey60",
+			 		colorNA = NA,
 			 		textNA = "Missing",
 					thres.poly = 1e-05,
 					title=NA,
@@ -196,7 +218,7 @@ tm_fill <- function(col="grey85",
 					id=NA,
 					...) {
 	
-	g <- list(tm_fill=c(as.list(environment()), list(map_coloring=list(...))))
+	g <- list(tm_fill=c(as.list(environment()), list(map_coloring=list(...), call=names(match.call(expand.dots = TRUE)[-1]))))
 	class(g) <- "tmap"
 	g
 }	
@@ -207,7 +229,7 @@ tm_fill <- function(col="grey85",
 #' @param lwd border line width (see \code{\link[graphics:par]{par}})
 #' @param lty border line type (see \code{\link[graphics:par]{par}})
 #' @export
-tm_borders <- function(col="grey40", lwd=1, lty="solid", alpha=NA) {
+tm_borders <- function(col=NA, lwd=1, lty="solid", alpha=NA) {
 	g <- list(tm_borders=as.list(environment()))
 	class(g) <- "tmap"
 	g
@@ -218,15 +240,17 @@ tm_borders <- function(col="grey40", lwd=1, lty="solid", alpha=NA) {
 #' @param border.col border line color
 #' @param border.alpha transparency number between 0 (totally transparent) and 1 (not transparent). By default, the alpha value of the \code{col} is used (normally 1).
 #' @export
-tm_polygons <- function(col="grey85", 
+tm_polygons <- function(col=NA, 
 						alpha=NA,
-						border.col="grey40",
+						border.col=NA,
 						border.alpha=NA,
 						...) {
 	args <- list(...)
 	argsFill <- c(list(col=col, alpha=alpha), args[names(args)])
 	argsBorders <- c(list(col=border.col, alpha=border.alpha), args[intersect(names(args), names(formals("tm_borders")))])
-	do.call("tm_fill", argsFill) + do.call("tm_borders", argsBorders)
+	g <- do.call("tm_fill", argsFill) + do.call("tm_borders", argsBorders)
+	g$tm_fill$call <- names(match.call(expand.dots = TRUE)[-1])
+	g
 }
 
 
@@ -236,9 +260,9 @@ tm_polygons <- function(col="grey85",
 #' 
 #' Small multiples can be drawn in two ways: either by specifying the \code{by} argument in \code{\link{tm_facets}}, or by defining multiple variables in the aesthetic arguments. The aesthetic argument of \code{tm_raster} is \code{col}. In the latter case, the arguments, except for \code{thres.poly}, and the ones starting with \code{legend.}, can be specified for small multiples as follows. If the argument normally only takes a single value, such as \code{n}, then a vector of those values can be specified, one for each small multiple. If the argument normally can take a vector, such as \code{palette}, then a list of those vectors (or values) can be specified, one for each small multiple.
 #' 
-#' @param col either a single color value or the name of a data variable that is contained in \code{shp}. In the latter case, either the data variable contains color values, or values (numeric or categorical) that will be depicted by a color palette (see \code{palette}. If multiple values are specified, small multiples are drawn (see details).
+#' @param col either a single color value or the name of a data variable that is contained in \code{shp}. In the latter case, either the data variable contains color values, or values (numeric or categorical) that will be depicted by a color palette (see \code{palette}. If multiple values are specified, small multiples are drawn (see details). By default, it is the name of the first data variable.
 #' @param alpha transparency number between 0 (totally transparent) and 1 (not transparent). By default, the alpha value of the \code{col} is used (normally 1).
-#' @param palette palette name. See \code{RColorBrewer::display.brewer.all()} for options. Use a \code{"-"} as prefix to reverse the palette. By default, \code{"RdYlGn"} is taken for numeric variables and \code{"Dark2"} for categorical variables.
+#' @param palette palette name. See \code{RColorBrewer::display.brewer.all()} for options. Use a \code{"-"} as prefix to reverse the palette. The default palette is taken from \code{\link{tm_layout}}'s argument \code{aes.palette}.
 #' @param n preferred number of classes (in case \code{col} is a numeric variable)
 #' @param style method to cut the color scale (in case \code{col} is a numeric variable): e.g. "fixed", "equal", "pretty", "quantile", or "kmeans". See the details in \code{\link[classInt:classIntervals]{classIntervals}}.
 #' @param breaks in case \code{style=="fixed"}, breaks should be specified
@@ -250,6 +274,7 @@ tm_polygons <- function(col="grey85",
 #' @param saturation Number that determines how much saturation (also known as chroma) is used: \code{saturation=0} is greyscale and \code{saturation=1} is normal. This saturation value is multiplied by the overall saturation of the map (see \code{\link{tm_style}}).
 #' @param textNA text used for missing values. Use \code{NA} to omit text for missing values in the legend
 #' @param title title of the legend element
+#' @param legend.show logical that determines whether the legend is shown
 #' @param legend.format list of formatting options for the legend numbers. Only applicable if \code{labels} is undefined. Parameters are:
 #' \describe{
 #' \item{scientific}{Should the labels be formatted scientically? If so, square brackets are used, and the \code{format} of the numbers is \code{"g"}. Otherwise, \code{format="f"}, and \code{text.separator}, \code{text.less.than}, and \code{text.or.more} are used. Also, the numbers are automatically  rounded to millions or billions if applicable.}
@@ -269,7 +294,7 @@ tm_polygons <- function(col="grey85",
 #' @example ../examples/tm_raster.r
 #' @seealso \href{../doc/tmap-nutshell.html}{\code{vignette("tmap-nutshell")}}
 #' @return \code{\link{tmap-element}}	
-tm_raster <- function(col="grey70",
+tm_raster <- function(col=NA,
 					  alpha = NA,
 					  palette = NULL,
 					  n = 5,
@@ -317,7 +342,7 @@ tm_raster <- function(col="grey70",
 #' @param n preferred number of color scale classes. Only applicable when \code{col} is a numeric variable name.
 #' @param style method to cut the color scale: e.g. "fixed", "equal", "pretty", "quantile", or "kmeans". See the details in \code{\link[classInt:classIntervals]{classIntervals}}. Only applicable when \code{col} is a numeric variable name.
 #' @param breaks in case \code{style=="fixed"}, breaks should be specified
-#' @param palette color palette (see \code{RColorBrewer::display.brewer.all}) for the bubbles. Only when \code{col} is set to a variable.
+#' @param palette color palette (see \code{RColorBrewer::display.brewer.all}) for the bubbles. Only when \code{col} is set to a variable. The default palette is taken from \code{\link{tm_layout}}'s argument \code{aes.palette}.
 #' @param labels labels of the classes
 #' @param auto.palette.mapping When diverging colour palettes are used (i.e. "RdBu") this method automatically maps colors to values such that the middle colors (mostly white or yellow) are assigned to values of 0, and the two sides of the color palette are assigned to negative respectively positive values.
 #' @param contrast vector of two numbers that determine the range that is used for sequential and diverging palettes (applicable when \code{auto.palette.mapping=TRUE}). Both numbers should be between 0 and 1. The first number determines where the palette begins, and the second number where it ends. For sequential palettes, 0 means the brightest color, and 1 the darkest color. For diverging palettes, 0 means the middle color, and 1 both extremes. If only one number is provided, this number is interpreted as the endpoint (with 0 taken as the start).
@@ -329,6 +354,8 @@ tm_raster <- function(col="grey70",
 #' @param jitter number that determines the amount of jittering, i.e. the random noise added to the position of the bubbles. 0 means no jittering is applied, any positive number means that the random noise has a standard deviation of \code{jitter} times the height of one line of text line.
 #' @param title.size title of the legend element regarding the bubble sizes
 #' @param title.col title of the legend element regarding the bubble colors
+#' @param legend.size.show logical that determines whether the legend for the bubble sizes is shown
+#' @param legend.col.show logical that determines whether the legend for the bubble colors is shown
 #' @param legend.format list of formatting options for the legend numbers. Only applicable if \code{labels} is undefined. Parameters are:
 #' \describe{
 #' \item{scientific}{Should the labels be formatted scientically? If so, square brackets are used, and the \code{format} of the numbers is \code{"g"}. Otherwise, \code{format="f"}, and \code{text.separator}, \code{text.less.than}, and \code{text.or.more} are used. Also, the numbers are automatically  rounded to millions or billions if applicable.}
@@ -356,7 +383,7 @@ tm_raster <- function(col="grey70",
 #' @references Flannery J (1971). The Relative Effectiveness of Some Common Graduated Point Symbols in the Presentation of Quantitative Data. Canadian Cartographer, 8 (2), 96-109.
 #' @seealso \href{../doc/tmap-nutshell.html}{\code{vignette("tmap-nutshell")}}
 #' @return \code{\link{tmap-element}}
-tm_bubbles <- function(size=.2, col="blueviolet",
+tm_bubbles <- function(size=.2, col=NA,
 						alpha=NA,
 						border.col=NA,
 						border.lwd=1,
@@ -420,7 +447,8 @@ tm_bubbles <- function(size=.2, col="blueviolet",
 							  legend.size.z=legend.size.z, 
 							  legend.col.z=legend.col.z,
 							  legend.hist.z=legend.hist.z,
-							  bubble.id=id))
+							  bubble.id=id,
+							  are.dots=FALSE))
 	class(g) <- "tmap"
 	g
 }
@@ -429,9 +457,11 @@ tm_bubbles <- function(size=.2, col="blueviolet",
 #' @rdname tm_bubbles
 #' @param ... arguments passed on to \code{tm_bubbles}
 #' @export
-tm_dots <- function(col="black", size=.02, title = NA, legend.is.portrait=TRUE, legend.z=NA, ...) {
-	do.call("tm_bubbles", c(list(size=size, col=col, title.col=title, 
+tm_dots <- function(col=NA, size=.02, title = NA, legend.is.portrait=TRUE, legend.z=NA, ...) {
+	g <- do.call("tm_bubbles", c(list(size=size, col=col, title.col=title, 
 								 legend.col.is.portrait=legend.is.portrait,
 								 legend.size.z=legend.z), list(...)))
+	g$tm_bubbles$are.dots <- TRUE
+	g
 }
 

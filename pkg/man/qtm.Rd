@@ -4,10 +4,9 @@
 \alias{qtm}
 \title{Quick thematic map plot}
 \usage{
-qtm(shp, fill = "grey85", bubble.size = NULL, bubble.col = NULL,
-  text = NULL, text.size = 1, line.lwd = NULL, line.col = NULL,
-  raster = "grey70", borders = "grey40", theme = NULL, scale = NA,
-  title = "", ...)
+qtm(shp, fill = NA, bubble.size = NULL, bubble.col = NULL, text = NULL,
+  text.size = 1, line.lwd = NULL, line.col = NULL, raster = NA,
+  borders = NA, theme = NULL, scale = NA, title = NA, ...)
 }
 \arguments{
 \item{shp}{shape object, which is one of
@@ -71,6 +70,8 @@ qtm(Europe, fill="gdp_cap_est", text="iso_a3", text.size="pop_est",
     fill.title="GDP per capita", fill.textNA="Non-European countries")
 
 qtm(World, fill="pop_est_dens", theme="World", fill.style="kmeans", fill.title="Population per km")
+
+qtm(World, fill="HPI", fill.n=9, fill.palette="RdYlGn", fill.auto.palette.mapping=FALSE)
 
 # bubble map
 qtm(World, borders = NA) + qtm(metro, bubble.size = "pop2010", bubble.col="purple", 

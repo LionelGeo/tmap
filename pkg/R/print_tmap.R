@@ -12,6 +12,9 @@
 #' @import gridBase
 #' @import classInt
 #' @import rgeos
+#' @importFrom grDevices col2rgb colorRampPalette dev.off is.raster png rgb
+#' @importFrom methods as slot slotNames
+#' @importFrom stats na.omit
 #' @importFrom spdep poly2nb
 #' @export
 #' @method print tmap
@@ -47,7 +50,7 @@ print.tmap <- function(x, vp=NULL, ...) {
 	
 	## find "MAP_COLORING" values
 	apply_map_coloring <- if ("tm_fill" %in% names(x)) {
-		any(sapply(x[which(names(x)=="tm_fill")], function(i)i$col[1]=="MAP_COLORS"))
+		any(sapply(x[which(names(x)=="tm_fill")], function(i)identical(i$col[1],"MAP_COLORS")))
 	} else FALSE
 	
 	
@@ -86,6 +89,10 @@ print.tmap <- function(x, vp=NULL, ...) {
 				data$SHAPE_AREAS <- approx_areas(shp, unit=shp.unit, unit.size = shp.unit.size)
 				attr(data, "AREAS_is_projected") <- is_projected(shp)
 				if (apply_map_coloring) attr(data, "NB") <- if (length(shp)==1) list(0) else poly2nb(shp)
+				attr(data, "dasymetric") <- ("dasymetric" %in% names(attributes(shp)))
+			}
+			if (inherits(shp, "SpatialLinesDataFrame")) {
+				attr(data, "isolines") <- ("isolines" %in% names(attributes(shp)))
 			}
 		} else if (inherits(shp, "Raster")) {
 			if (fromDisk(shp)) {
@@ -161,7 +168,7 @@ print.tmap <- function(x, vp=NULL, ...) {
 	asp_ratio <- shpM_asp_marg / dev_asp
 	
 	## process tm objects
-	shp_info <- x[[shape.id[masterID]]][c("unit", "unit.size")]
+	shp_info <- x[[shape.id[masterID]]][c("unit", "unit.size", "line.center.type")]
 	shp_info$is_raster <- any_raster
 	result <- process_tm(x, asp_ratio, shp_info)
 	gmeta <- result$gmeta

@@ -1,8 +1,18 @@
-process_text <- function(data, g, fill, gst) {
+process_text <- function(data, g, fill, gt, gst) {
 	root <- NULL; text.size.lowerbound <- NULL; text.scale <- NULL; text.bg.alpha <- NULL; text.case <- NULL; text.alpha <- NULL
 	text.shadow <- NULL
 	
 	npol <- nrow(data)
+
+	if (gt$aes.colors.light["text"]) {
+		collight <- gt$aes.colors["text"]
+		coldark <- "black"
+	} else {
+		collight <- "white"
+		coldark <- gt$aes.colors["text"]
+	}
+	
+	if (is.na(fill[1])) fill <- ifelse(gt$aes.colors.light["text"], "black", "white")
 	
 	within(g, {
 		#xtext <- text
@@ -11,7 +21,6 @@ process_text <- function(data, g, fill, gst) {
 		text <- if (nx > 1) matrix(unlist(lapply(data[, text]), as.character), ncol=nx) else as.character(data[[text]])
 		if (!is.na(text.case)) text <- if(text.case=="upper") toupper(text) else tolower(text)
 		rm(nx)
-		
 		if (is.character(text.size)) {
 			if (text.size=="AREA") {
 				text.size <- data$SHAPE_AREAS
@@ -19,18 +28,21 @@ process_text <- function(data, g, fill, gst) {
 				text.size <- data[[text.size]]
 			}
 			text.size <- (text.size / max(text.size, na.rm=TRUE)) ^ (1/root)
-		} else text.size <- rep(text.size, length.out=npol)
+		} else {
+			text.size <- rep(text.size, length.out=npol)
+			text.size.lowerbound <- 0
+		}
 		text.fontcolor <- if (is.na(text.fontcolor[1])) {
 			if (is.matrix(fill)) {
 				apply(fill, MARGIN=2, function(f) {
 					fillrgb <- col2rgb(f)
 					light <- apply(fillrgb * c(.299, .587, .114), MARGIN=2, sum) >= 128
-					rep(ifelse(light, "black", "white"), length.out=npol)
+					rep(ifelse(light, coldark, collight), length.out=npol)
 				})
 			} else {
 				fillrgb <- col2rgb(fill)
 				light <- apply(fillrgb * c(.299, .587, .114), MARGIN=2, sum) >= 128
-				rep(ifelse(light, "black", "white"), length.out=npol)
+				rep(ifelse(light, coldark, collight), length.out=npol)
 			}
 		} else rep(text.fontcolor, length.out=npol)
 		
@@ -39,12 +51,12 @@ process_text <- function(data, g, fill, gst) {
 				apply(text.fontcolor, MARGIN=2, function(f) {
 					fillrgb <- col2rgb(f)
 					light <- apply(fillrgb * c(.299, .587, .114), MARGIN=2, sum) >= 128
-					rep(ifelse(light, "black", "white"), length.out=npol)
+					rep(ifelse(light, coldark, collight), length.out=npol)
 				})
 			} else {
 				fillrgb <- col2rgb(text.fontcolor)
 				light <- apply(fillrgb * c(.299, .587, .114), MARGIN=2, sum) >= 128
-				rep(ifelse(light, "black", "white"), length.out=npol)
+				rep(ifelse(light, coldark, collight), length.out=npol)
 			}
 		}
 		

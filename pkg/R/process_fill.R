@@ -6,7 +6,7 @@ process_fill_vector <- function(x, g, gt, gst, tiny) {
 	
 	
 	if (is.factor(x)) {
-		palette <- if (is.null(g$palette)) ifelse(nlevels(x)>8, "Set3", "Dark2") else g$palette
+		palette <- if (is.null(g$palette)) gt$aes.palette[[ifelse(is.ordered(x), "seq", "cat")]] else g$palette
 		colsLeg <- cat2pal(x,
 						   palette = palette,
 						   contrast = g$contrast,
@@ -17,7 +17,8 @@ process_fill_vector <- function(x, g, gt, gst, tiny) {
 						   process.colors=c(list(alpha=g$alpha), gst))
 		fill.breaks <- NA
 	} else {
-		palette <- if (is.null(g$palette)) "RdYlGn" else g$palette
+		is.diverging <- (any(na.omit(x)<0) || any(g$breaks<0)) && (any(na.omit(x)>0) || any(g$breaks>0))
+		palette <- if (is.null(g$palette)) gt$aes.palette[[ifelse(is.diverging, "div", "seq")]] else g$palette
 		colsLeg <- num2pal(x, g$n, style=g$style, breaks=g$breaks, 
 						   palette = palette,
 						   auto.palette.mapping = g$auto.palette.mapping,
@@ -54,22 +55,27 @@ process_fill <- function(data, g, gb, gt, gst, gby, z) {
 	by <- data$GROUP_BY
 	
 	shpcols <- names(data)[1:(ncol(data)-2)]
-	
-	
-	
+
 	x <- g$col
+
+	if (is.na(x)[1]) x <- gt$aes.colors["fill"]
+	if (is.na(g$colorNA)[1]) g$colorNA <- gt$aes.colors["na"]
+	
 	# if by is specified, use first value only
 	if (nlevels(by)>1) x <- x[1]
 	nx <- length(x)
 	
 	# check for direct color input
 	is.colors <- all(valid_colors(x))
-	if (is.colors) {
+	if (attr(data, "dasymetric") && !("col" %in% g$call) && "level" %in% shpcols) {
+		is.colors <- FALSE
+		x <- "level"
+	} else if (is.colors) {
 		x <- do.call("process_color", c(list(col=col2hex(x), alpha=g$alpha), gst))
 		for (i in 1:nx) data[[paste("COLOR", i, sep="_")]] <- x[i]
 		x <- paste("COLOR", 1:nx, sep="_")
 	} else if (x[1]=="MAP_COLORS") {
-		palette <- if (is.null(g$palette)) "Set2" else g$palette
+		palette <- if (is.null(g$palette)) gt$aes.palette[["cat"]] else g$palette
 		mapcols <- do.call("map_coloring", args = c(list(x=attr(data, "NB"), palette=palette, contrast = g$contrast), g$map_coloring))
 		mapcols <- do.call("process_color", c(list(col=mapcols, alpha=g$alpha), gst))
 		
@@ -94,9 +100,8 @@ process_fill <- function(data, g, gb, gt, gst, gby, z) {
 		to_be_assigned <- setdiff(names(gt$legend.format), names(g$legend.format))
 		g$legend.format[to_be_assigned] <- gt$legend.format[to_be_assigned]
 	}
-		
+
 	
-		
 	# return if data is matrix of color values
 	if (is.matrix(dt)) {
 		if (!is.colors) {
@@ -159,7 +164,6 @@ process_fill <- function(data, g, gb, gt, gst, gby, z) {
 	} else if (g$legend.hist && !is.na(g$legend.hist.title)) {
 		fill.legend.hist.title <- g$legend.hist.title
 	} else fill.legend.hist.title <- ""
-	
 	list(fill=fill,
 		 fill.legend.labels=fill.legend.labels,
 		 fill.legend.palette=fill.legend.palette,

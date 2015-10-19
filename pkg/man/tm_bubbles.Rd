@@ -5,20 +5,21 @@
 \alias{tm_dots}
 \title{Draw bubbles or dots}
 \usage{
-tm_bubbles(size = 0.2, col = "blueviolet", alpha = NA, border.col = NA,
+tm_bubbles(size = 0.2, col = NA, alpha = NA, border.col = NA,
   border.lwd = 1, border.alpha = NA, scale = 1, perceptual = FALSE,
   size.lim = NA, sizes.legend = NULL, sizes.legend.labels = NULL, n = 5,
   style = ifelse(is.null(breaks), "pretty", "fixed"), breaks = NULL,
   palette = NULL, labels = NULL, auto.palette.mapping = TRUE,
   contrast = 1, max.categories = 12, colorNA = "#FF1414",
   textNA = "Missing", jitter = 0, xmod = 0, ymod = 0, title.size = NA,
-  title.col = NA, legend.format = list(), legend.size.is.portrait = FALSE,
+  title.col = NA, legend.size.show = TRUE, legend.col.show = TRUE,
+  legend.format = list(), legend.size.is.portrait = FALSE,
   legend.col.is.portrait = TRUE, legend.hist = FALSE,
   legend.hist.title = NA, legend.size.z = NA, legend.col.z = NA,
   legend.hist.z = NA, id = NA)
 
-tm_dots(col = "black", size = 0.02, title = NA,
-  legend.is.portrait = TRUE, legend.z = NA, ...)
+tm_dots(col = NA, size = 0.02, title = NA, legend.is.portrait = TRUE,
+  legend.z = NA, ...)
 }
 \arguments{
 \item{size}{a single value or a \code{shp} data variable that determines the bubble sizes. The reference value \code{size=1} corresponds to the area of bubbles that have the same height as one line of text. If a data variable is provided, the bubble sizes are scaled proportionally (or perceptually, see \code{perceptual}) where the largest bubble will get \code{size=1}. If multiple values are specified, small multiples are drawn (see details).}
@@ -49,7 +50,7 @@ tm_dots(col = "black", size = 0.02, title = NA,
 
 \item{breaks}{in case \code{style=="fixed"}, breaks should be specified}
 
-\item{palette}{color palette (see \code{RColorBrewer::display.brewer.all}) for the bubbles. Only when \code{col} is set to a variable.}
+\item{palette}{color palette (see \code{RColorBrewer::display.brewer.all}) for the bubbles. Only when \code{col} is set to a variable. The default palette is taken from \code{\link{tm_layout}}'s argument \code{aes.palette}.}
 
 \item{labels}{labels of the classes}
 
@@ -72,6 +73,10 @@ tm_dots(col = "black", size = 0.02, title = NA,
 \item{title.size}{title of the legend element regarding the bubble sizes}
 
 \item{title.col}{title of the legend element regarding the bubble colors}
+
+\item{legend.size.show}{logical that determines whether the legend for the bubble sizes is shown}
+
+\item{legend.col.show}{logical that determines whether the legend for the bubble colors is shown}
 
 \item{legend.format}{list of formatting options for the legend numbers. Only applicable if \code{labels} is undefined. Parameters are:
 \describe{
