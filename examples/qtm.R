@@ -1,21 +1,16 @@
-data(Europe)
-data(World)
-data(metro)
+data(World, rivers, metro)
 
 # just the map
-qtm(Europe)
+qtm(World)
 
 # choropleth
-qtm(World, fill = "economy", text="iso_a3", text.size = "AREA", 
-    fill.palette="-Blues", theme = "World", fill.title="Economy")
+qtm(World, fill = "economy", format="World", style="col_blind")
 
-qtm(Europe, fill="gdp_cap_est", text="iso_a3", text.size="pop_est", 
-    fill.title="GDP per capita", fill.textNA="Non-European countries")
-
-qtm(World, fill="pop_est_dens", theme="World", fill.style="kmeans", fill.title="Population per km")
-
-qtm(World, fill="HPI", fill.n=9, fill.palette="RdYlGn", fill.auto.palette.mapping=FALSE)
+qtm(World, fill="HPI", fill.n=9, fill.palette="div", fill.auto.palette.mapping=FALSE, 
+	fill.title="Happy Planet Index", format="World", style="gray")
 
 # bubble map
-qtm(World, borders = NA) + qtm(metro, bubble.size = "pop2010", bubble.col="purple", 
-    bubble.title.size="Metropolitan Areas", theme = "World", bubble.scale=.5)
+qtm(World, borders = NULL) + qtm(metro, bubble.size = "pop2010", 
+    bubble.title.size="Metropolitan Areas", bubble.scale=.5, format = "World")
+
+# TIP: check out these examples in view mode, enabled with tmap_mode("view")

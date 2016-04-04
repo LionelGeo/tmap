@@ -27,52 +27,12 @@ plot_map <- function(i, gp, gt, shps, bbx, proj, sasp) {
 		
 		## obtain coordinates (to draw bubbles and text)
 		if (inherits(shp, "Spatial")) {
-			if (inherits(shp, "SpatialLines")) {
-				
- 				if (gt$line.center.type[1]=="segment") {
- 					ns <- length(shp)
- 					shp_lst <- one_line_per_lines(shp)
- 					shp <- shp_lst$shp
- 					attr(shp, "bbox") <- bbx
- 					id <- shp_lst$id
- 					
- 					aes <- intersect(names(gpl), c("line.col", "line.lwd", "bubble.size", "text", "text.size", "text.fontcolor", "text.xmod", "text.ymod", "text_sel", "bubble.size", "bubble.col", "bubble.xmod", "bubble.ymod"))
- 					
- 					gpl[aes] <- lapply(gpl[aes], function(a) {
- 						if (length(a)==ns) {
- 							a[id]
- 						} else a
- 					})
- 				}
-
-				if (gt$line.center.type[2]=="midpoint") {
-					co <- lines_midpoints(shp)@coords
-					
-					if (gt$line.center.type[1]=="feature") {
-						lC <- gCentroid(shp, byid=TRUE)@coords
-						lCX <- lC[,1]
-						lCY <- lC[,2]
-						lens <- sapply(shp@lines, function(lns)length(lns@Lines))
-						
-						X <- co[,1]
-						Y <- co[,2]
-						ID <- do.call("c", mapply(rep, 1:length(lens), lens, SIMPLIFY=FALSE))
-						Xs <- split(X, ID)
-						Ys <- split(Y, ID)
-						
-						co <- t(mapply(function(x1, y1, x2, y2) {
-							minid <- which.min(sqrt((x1-x2)^2 + (y1-y2)^2))
-							c(x2[minid], y2[minid])
-						}, lCX, lCY, Xs, Ys, SIMPLIFY=TRUE))
-					}
-				} else {
-					co <- gCentroid(shp, byid=TRUE)@coords
-				}
-
-			} else {
-				co <- coordinates(shp) # prefered over gCentroid since coordinates correspond to first (normally largest) polygon of each object
-			}
-			co.npc <- co
+			res <- get_sp_coordinates(shp, gpl, gt, bbx)
+			co.npc <- res$co
+			if (gt$line.center.type[1]=="segment") {
+				gpl <- res$gpl
+				shp <- res$shp
+			}	
 			co.npc[,1] <- if (bbx[1, 2]-bbx[1,1]==0) .5 else {
 				(co.npc[,1]-bbx[1,1]) / (bbx[1, 2]-bbx[1,1])	
 			}
@@ -85,12 +45,12 @@ plot_map <- function(i, gp, gt, shps, bbx, proj, sasp) {
 
 		plot_tm_fill <- function() {
 			fill <- if (is.null(gpl$fill)) NA else gpl$fill
-			col <- process_color(gpl$col, alpha=gpl$alpha, sepia.intensity=gt$sepia.intensity, saturation=gt$saturation)
+			col <- gpl$col
 			grid.shape(shp, gp=gpar(fill=fill, col=col, lwd=gpl$lwd, lty=gpl$lty), bg.col=gt$bg.color, i, k)
 		}
 		
 		plot_tm_lines <- function() {
-			col <- process_color(gpl$line.col, alpha=gpl$line.alpha, sepia.intensity=gt$sepia.intensity, saturation=gt$saturation)
+			col <- gpl$line.col
 			grid.shplines(shp, gp=gpar(col=col, lwd=gpl$line.lwd, lty=gpl$line.lty,
 									   lineend="butt"), i, k)
 		}
@@ -118,9 +78,8 @@ plot_map <- function(i, gp, gt, shps, bbx, proj, sasp) {
 			
 			x <- (cent[1] - bb_target[1,1]) / (bb_target[1,2] - bb_target[1,1])
 			y <- (cent[2] - bb_target[2,1]) / (bb_target[2,2] - bb_target[2,1])
-			
 			#if (inherits(shp, "Spatial")) shp <- as(shp, "RasterLayer")
-			rasterGrob(matrix(rast, ncol=shp@ncols, nrow=shp@nrows, byrow = TRUE), x=x, y=y, width=width, height=height)
+			rasterGrob(matrix(rast, ncol=shp@ncols, nrow=shp@nrows, byrow = TRUE), x=x, y=y, width=width, height=height, interpolate = FALSE)
 		} 
 		
 		e <- environment()
@@ -136,8 +95,8 @@ plot_map <- function(i, gp, gt, shps, bbx, proj, sasp) {
 				
 				tGX <- convertX(tG$x, "npc", valueOnly = TRUE)
 				tGY <- convertY(tG$y, "npc", valueOnly = TRUE)
-				tGWidth <- convertWidth(tG$width, "npc", valueOnly = TRUE)
-				tGHeight <- convertHeight(tG$height, "npc", valueOnly = TRUE)
+				#tGWidth <- convertWidth(tG$width, "npc", valueOnly = TRUE)
+				#tGHeight <- convertHeight(tG$height, "npc", valueOnly = TRUE)
 				nt <- length(tGX)
 				
 				
@@ -151,14 +110,23 @@ plot_map <- function(i, gp, gt, shps, bbx, proj, sasp) {
 					})
 					
 					pShp <- SpatialPoints(coords, proj4string = lShp@proj4string)
-					ppShp <- as(gBuffer(pShp, width = buffer_width(bb(lShp))*1000, byid = TRUE), "SpatialLines")
+					ppShp <- as(gBuffer(pShp, width = .01, byid = TRUE), "SpatialLines")
 					ppShps <- lapply(ppShp@lines, function(l){
 						SpatialLines(list(l), proj4string = ppShp@proj4string)
 					})
 					iShps <- mapply(gIntersection, lShps, ppShps, MoreArgs = list(byid = FALSE))
 					
-					angles <- sapply(iShps, function(x) if (is.null(x)) 0 else .get_direction_angle(x@coords))
-				} else angles <- 0
+					angles <- sapply(iShps, function(x) {
+						if (is.null(x)) 0 else {
+							if (inherits(x, "SpatialPoints")) {
+								.get_direction_angle(x@coords)	
+							} else if (inherits(x, "SpatialLines")) {
+								.get_direction_angle(x@lines[[1]]@Lines[[1]]@coords)	
+							} else 0
+							
+						}
+					})
+				} else angles <- rep(0, nt)
 				
 
 				rG <- if (any(angles!=0)) {
@@ -172,10 +140,15 @@ plot_map <- function(i, gp, gt, shps, bbx, proj, sasp) {
 				
 				
 				# Automatic label placement (Simulated Annealing)
-				if (gpl$text.auto.placement) {
-					xy <- pointLabelGrid(rGX, rGY, rGWidth, rGHeight, xyAspect = sasp)
-					shiftX <- xy$x - rGX
-					shiftY <- xy$y - rGY
+				if (gpl$text.auto.placement || identical(gpl$text.auto.placement, 0)) {
+					el <- if (is.numeric(gpl$text.auto.placement)) gpl$text.auto.placement * .5 else 0
+					textSizes <- gpl$text.size[gpl$text_sel]
+					elX <- convertWidth(unit(textSizes, "lines"), "npc", valueOnly = TRUE) * el
+					elY <- convertHeight(unit(textSizes, "lines"), "npc", valueOnly = TRUE) * el
+					xy <- pointLabelGrid(rGX-elX*.5, rGY-elY*.5, rGWidth+elX, rGHeight+elY, xyAspect = sasp)
+					dir <- atan2(xy$y - rGY, xy$x - rGX)
+					shiftX <- (xy$x - rGX) + elX * cos(dir)
+					shiftY <- (xy$y - rGY) + elY * sin(dir)
 				} else {
 					shiftX <- 0
 					shiftY <- 0
@@ -225,7 +198,6 @@ plot_map <- function(i, gp, gt, shps, bbx, proj, sasp) {
 				}
 				tGrob <- do.call("gList", lapply(tGrob, .editGrob, sel=sel, shiftX=shiftX, shiftY=shiftY, angles=angles))
 				
-
 				if (gpl$text.overwrite.lines && "plot_tm_lines" %in% fnames) {
 					# Remove line where labels overlap
 					lGrob <- grobs[[which(fnames=="plot_tm_lines")]]
@@ -281,17 +253,20 @@ plot_map <- function(i, gp, gt, shps, bbx, proj, sasp) {
 	
 	# cut map to projection boundaries (i.e. longlat bb -180 - 180, -90 to 90)
 	if (gt$earth.boundary) {
-		world_bb_co <- matrix(c(
-			rep(-180, 181), seq(-179, 179), rep(180, 181), seq(179, -179),
-			seq(-90, 90), rep(90, 359), seq(90, -90), rep(-90, 359)), ncol=2)
+		world_bb_sp2 <- end_of_the_world(earth.datum = gt$earth.datum, proj = proj, bbx = gt$earth.bounds)
 		
-		world_bb_sp <- SpatialPolygons(list(Polygons(list(Polygon(coords=world_bb_co)), ID="world_bb")), proj4string=CRS(get_proj4_code(gt$earth.datum)))
-		world_bb_sp2 <- set_projection(world_bb_sp, projection = proj)
+# 		world_bb_co <- matrix(c(
+# 			rep(-180, 181), seq(-179, 179), rep(180, 181), seq(179, -179),
+# 			seq(-90, 90), rep(90, 359), seq(90, -90), rep(-90, 359)), ncol=2)
+# 		
+# 		world_bb_sp <- SpatialPolygons(list(Polygons(list(Polygon(coords=world_bb_co)), ID="world_bb")), proj4string=CRS(get_proj4(gt$earth.datum)))
+# 		world_bb_sp2 <- set_projection(world_bb_sp, projection = proj)
 		world_bb_co2 <- world_bb_sp2@polygons[[1]]@Polygons[[1]]@coords
 		
 		world_bb_co3 <- matrix(c((world_bb_co2[,1] - bbx[1,1])/(bbx[1,2]-bbx[1,1]),
 								 (world_bb_co2[,2] - bbx[2,1])/(bbx[2,2]-bbx[2,1])), ncol=2)
 		
+		worldBB_bg <- if (!is.na(gt$frame)) NULL else pathGrob(x = world_bb_co3[,1], y = world_bb_co3[,2], id=rep(1,nrow(world_bb_co3)), gp=gpar(col=NA, fill=gt$bg.color))
 		worldBB <- pathGrob(x = world_bb_co3[,1], y = world_bb_co3[,2], id=rep(1,nrow(world_bb_co3)), gp=gpar(col=gt$earth.boundary.color, fill=NA, lwd=gt$earth.boundary.lwd))
 		
 		worldBB_cut <- pathGrob(x = c(0, 0, 1, 1, rev(world_bb_co3[,1])), y = c(0, 1, 1, 0, rev(world_bb_co3[,2])), id=c(rep(1,4), rep(2,nrow(world_bb_co3))), gp=gpar(col=NA, fill=gt$space.color))
@@ -303,11 +278,12 @@ plot_map <- function(i, gp, gt, shps, bbx, proj, sasp) {
 		}
 	} else {
 		grobWorldBB <- NULL
+		worldBB_bg <- NULL
 	}
 	
 	
 	
-	grobsElemGrid <- do.call("gList", args = c(treeElements, list(grobWorldBB, treeGridLabels)))
+	grobsElemGrid <- do.call("gList", args = c(list(worldBB_bg), treeElements, list(grobWorldBB, treeGridLabels)))
 	
 	
 	list(treeElemGrid=gTree(children=grobsElemGrid, name="mapElements"), lineInch=lineInch, metaX=metaX, metaY=metaY)

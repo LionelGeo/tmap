@@ -32,15 +32,19 @@
 #' \item{\code{"ncol"}}{Number of rows in the raster}
 #' \item{\code{"nrow"}}{Number of columns in the raster}
 #' }
-#' @import raster
-#' @import rgeos
-#' @import KernSmooth
+#' @importFrom raster raster extent couldBeLonLat extract extend rasterToContour
+#' @importMethodsFrom raster as.vector
+#' @importFrom rgeos gConvexHull gUnaryUnion gPointOnSurface gContains gIsValid gIntersection gArea gBuffer gDifference
+#' @importFrom KernSmooth bkde2D
+#' @importFrom grDevices contourLines
+#' @example ../examples/smooth_map.R
 #' @export
-smooth_map <- function(shp, var=NULL, nrow=NA, ncol=NA, N=250000, unit="km", unit.size=1000, smooth.raster=TRUE, nlevels=5, style = ifelse(is.null(breaks), "pretty", "fixed"), breaks = NULL, bandwidth=NA, cover.type=NA, cover=NULL, cover.threshold=.6, weight=1, extracting.method=FULL, buffer.width=NA, to.Raster=FALSE) {
+smooth_map <- function(shp, var=NULL, nrow=NA, ncol=NA, N=250000, unit="km", unit.size=1000, smooth.raster=TRUE, nlevels=5, style = ifelse(is.null(breaks), "pretty", "fixed"), breaks = NULL, bandwidth=NA, cover.type=NA, cover=NULL, cover.threshold=.6, weight=1, extracting.method="full", buffer.width=NA, to.Raster=FALSE) {
 	bbx <- bb(shp)
 	prj <- get_projection(shp)
 #	asp <- get_asp_ratio(shp)
 
+	pb <- txtProgressBar()
 	
 	if (!inherits(shp, c("SpatialPoints", "SpatialPolygons", "SpatialGrid", "Raster"))) {
 		stop("shp is not a Raster nor a SpatialPoints, -Polygons, or -Grid object")
@@ -64,7 +68,7 @@ smooth_map <- function(shp, var=NULL, nrow=NA, ncol=NA, N=250000, unit="km", uni
 	N <- nrow * ncol
 
 	if (!is_projected(shp) || is.na(unit)) {
-		warning("shp is not projected; therefore density values cannot be calculated")
+		warning("shp is not projected; therefore density values cannot be calculated", call. = FALSE)
 		cell.area <- 1
 	} else {
 		cell.width <- (bbx[1,2] - bbx[1,1]) / (unit.size * ncol)
@@ -86,6 +90,7 @@ smooth_map <- function(shp, var=NULL, nrow=NA, ncol=NA, N=250000, unit="km", uni
 
 	cover_r <- raster(extent(bbx), nrows=nrow, ncols=ncol, crs=prj)
 	
+	setTxtProgressBar(pb, .1)
 		
 	## process cover
 	if (is.na(cover.type)) cover.type <- ifelse(inherits(shp, "SpatialPolygons"), "original", "rect")
@@ -121,6 +126,7 @@ smooth_map <- function(shp, var=NULL, nrow=NA, ncol=NA, N=250000, unit="km", uni
 		bbx[, 1] <- pmin(bbx[, 1], bbc[, 1])
 		bbx[, 2] <- pmin(bbx[, 2], bbc[, 2])
 	}
+	setTxtProgressBar(pb, .3)
 	
 
 	if (inherits(shp, "SpatialPoints")) {
@@ -148,6 +154,7 @@ smooth_map <- function(shp, var=NULL, nrow=NA, ncol=NA, N=250000, unit="km", uni
 			lvls <- num2breaks(r[], n=nlevels, style=style, breaks=breaks)$brks
 		}
 	}
+	setTxtProgressBar(pb, .5)
 	
 	if (inherits(shp, "SpatialPoints") || smooth.raster) {
 		# fill raster values
@@ -194,10 +201,13 @@ smooth_map <- function(shp, var=NULL, nrow=NA, ncol=NA, N=250000, unit="km", uni
 		
 		cl2 <- rasterToContour(r2, maxpixels = length(r2), levels=lvls)
 	}
+	setTxtProgressBar(pb, .7)
 	
 	# make sure lines are inside poly
-	cp <- lines2polygons(ply = cover, lns = cl2, rst = r, lvls=lvls, extracting.method="full", buffer.width = NA)
+	cp <- lines2polygons(ply = cover, lns = cl2, rst = r, lvls=lvls, extracting.method="full", buffer.width = buffer.width)
 	attr(cp, "dasymetric") <- TRUE
+	
+	setTxtProgressBar(pb, .9)
 	
 	lns <- SpatialLinesDataFrame(gIntersection(cover, cl2, byid = TRUE), data=cl2@data, match.ID = FALSE)
 	attr(lns, "isolines") <- TRUE
@@ -309,7 +319,7 @@ lines2polygons <- function(ply, lns, rst=NULL, lvls, extracting.method="full", b
 			})
 		} else {
 			# extracting.method=="full"
-			values <- sapply(extract(rst, dpi2), mean, na.rm=TRUE)
+			values <- sapply(extract(rst, dpi2), function(x)if (is.null(x)) NA else mean(x, na.rm=TRUE))
 		}
 		
 		

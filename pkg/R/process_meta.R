@@ -1,5 +1,5 @@
-process_meta <- function(gt, gst, gf, gg, gc, gsb, gcomp, nx, by_names, asp_ratio, shp_info) {
-	
+process_meta <- function(gt, gf, gg, gc, gsb, gcomp, nx, panel.names, asp_ratio, shp_info, any.legend, interactive) {
+	attr.color <- aes.colors <- aes.color <- pc <- grid.alpha <- NULL
 	
 	gf <- within(gf, {
 		by <- NULL
@@ -39,18 +39,49 @@ process_meta <- function(gt, gst, gf, gg, gc, gsb, gcomp, nx, by_names, asp_rati
 	m <- gf$ncol * gf$nrow
 	
 	legend.only <- legend.frame <- legend.bg.alpha <- legend.hist.bg.alpha <- title.bg.alpha <- NULL
+	freescales <- names(gf)[substr(names(gf), 1, 11) == "free.scales"]
+	
 	gt <- within(gt, {
-		if (legend.only) {
-			title <- rep("", nx)
-			legend.width <- 1
-			legend.height <- 1
+		if (!any.legend) {
+			if (legend.only) stop("No legend to show.", call.=FALSE)
+			legend.show <- FALSE
+			legend.outside <- FALSE
 		} else {
-			title <- if (is.na(title[1])) {
-				if (is.na(by_names[1])) "" else by_names
-			} else title
-			title <- rep(title, length.out=nx)
+			if (is.na(legend.outside)) legend.outside <- (nx > 1) && !any(vapply(gf[freescales], "[", logical(1), 1))
 		}
 		
+		if (is.na(panel.show)) panel.show <- !is.na(panel.names[1])
+		if (legend.only) {
+			title <- rep("", nx)
+			legend.width <- .9
+			legend.height <- .9
+		} else {
+			if (nx>1) {
+				if (is.na(panel.names[1])) {
+					title <- if (is.na(title[1])) rep("", nx) else rep(title, nx)
+				} else if (is.list(panel.names) && panel.show) {
+					if (is.na(title[1])) {
+						title <- panel.names
+					} else {
+						if (!is.list(title) || length(title)!=2) stop("for cross table facets, title should be a list containing the row names in the first, and column names in the second item.", call. = FALSE)
+						if (length(title[[1]])!=length(panel.names[[1]])) stop("number of row names incorrect", call.=FALSE)
+						if (length(title[[2]])!=length(panel.names[[2]])) stop("number of column names incorrect", call.=FALSE)
+					}
+				} else {
+					if (is.list(title)) stop("unable to use row and column names unless panel.show in tm_layout is TRUE", call.=FALSE)
+					title <- if (is.na(title[1])) {
+						if (is.list(panel.names)) rep("", nx) else panel.names
+					} else rep(title, nx)
+				}
+			} else {
+				title <- if (is.na(title[1])) "" else title[1]
+			}
+			if (panel.show) {
+				panel.names <- title
+				title <- rep("", nx)
+			}
+		}
+
 		if (asp_ratio>1) {
 			asp_w <- 1
 			asp_h <- 1/asp_ratio
@@ -58,13 +89,15 @@ process_meta <- function(gt, gst, gf, gg, gc, gsb, gcomp, nx, by_names, asp_rati
 			asp_w <- asp_ratio
 			asp_h <- 1
 		}
-		
-		scale <- scale * (min(1/ (asp_w * gf$ncol), 1 / (asp_h * gf$nrow))) ^ (1/gf$scale.factor)
+		scale.extra <- (min(1/ (asp_w * gf$ncol), 1 / (asp_h * gf$nrow))) ^ (1/gf$scale.factor)
+		scale <- scale * scale.extra
 
 		title.size <- title.size * scale
 		legend.title.size <- legend.title.size * scale
 		legend.text.size <- legend.text.size * scale
 		legend.hist.size <- legend.hist.size * scale
+		
+		panel.label.size <- panel.label.size * scale
 				
 		#if (is.null(bg.color)) bg.color <- "white"
 		if (is.null(space.color)) space.color <- bg.color
@@ -72,37 +105,67 @@ process_meta <- function(gt, gst, gf, gg, gc, gsb, gcomp, nx, by_names, asp_rati
 		legend.inside.box <- if (!is.logical(legend.frame)) TRUE else legend.frame
 		if (identical(title.bg.color, TRUE)) title.bg.color <- bg.color
 		
-		if (identical(frame, TRUE)) frame <- attr.color else frame <- NA 
+		if (identical(frame, TRUE)) frame <- attr.color else if (identical(frame, FALSE)) frame <- NA 
 		if (is.logical(legend.frame)) if (identical(legend.frame, TRUE)) legend.frame <- attr.color else legend.frame <- NA 
-		
+# 		
+# 		between.margin.in <- convertHeight(unit(between.margin, "lines") * scale, "inch", valueOnly=TRUE)
+# 		
+# 		between.margin.y <-convertHeight(unit(between.margin.in, "inch"), "npc", valueOnly=TRUE) * gf$nrow
+# 		between.margin.x <-convertWidth(unit(between.margin.in, "inch"), "npc", valueOnly=TRUE) * gf$ncol
+# 		
 		
 		outer.margins <- rep(outer.margins, length.out=4)
+		#outer.margins <- rep(0, length.out=4)
+		# 		if (m>1) {
+# 			outer.margins <- c(between.margin.y, between.margin.x, between.margin.y, between.margin.x)
+# 		}
 		
 		inner.margins <- if (is.na(inner.margins[1])) {
 			if (shp_info$is_raster) rep(0, 4) else rep(0.02, 4)
 		} else rep(inner.margins, length.out=4)
 		
- 		attr.color.light <- sum(col2rgb(attr.color) * c(.299, .587, .114)) >= 128
- 		aes.color.light <- sum(col2rgb(aes.color) * c(.299, .587, .114)) >= 128
+ 		attr.color.light <- is_light(attr.color)
+ 		aes.color.light <- is_light(aes.colors)
 
-		title.color <- do.call("process_color", c(list(col=title.color), gst))
-		legend.text.color <- do.call("process_color", c(list(col=legend.text.color), gst))
-		if (!is.na(frame)) frame <- do.call("process_color", c(list(col=frame), gst))
-		if (!is.na(legend.frame)) legend.frame <- do.call("process_color", c(list(col=legend.frame), gst))
+		title.color <- do.call("process_color", c(list(col=title.color), pc))
+		legend.text.color <- do.call("process_color", c(list(col=legend.text.color), pc))
+		if (!is.na(frame)) frame <- do.call("process_color", c(list(col=frame), pc))
+		if (!is.na(legend.frame)) legend.frame <- do.call("process_color", c(list(col=legend.frame), pc))
+		
+		panel.label.color <- do.call("process_color", c(list(col=panel.label.color), pc))
+		panel.label.bg.color <- do.call("process_color", c(list(col=panel.label.bg.color), pc))
 		
 		if (is.na(earth.boundary.color)) earth.boundary.color <- attr.color
-		earth.boundary.color <- do.call("process_color", c(list(col=earth.boundary.color), gst))
+		earth.boundary.color <- do.call("process_color", c(list(col=earth.boundary.color), pc))
 		
-		#attr.color <- do.call("process_color", c(list(col=attr.color), gst))
-		bg.color <- do.call("process_color", c(list(col=bg.color), gst))
-		if (!is.null(outer.bg.color)) outer.bg.color <- do.call("process_color", c(list(col=outer.bg.color), gst))
-		if (!is.na(legend.bg.color)) legend.bg.color <- do.call("process_color", c(list(col=legend.bg.color, alpha=legend.bg.alpha), gst))
-		if (!is.na(legend.hist.bg.color)) legend.hist.bg.color <- do.call("process_color", c(list(col=legend.hist.bg.color, alpha=legend.hist.bg.alpha), gst))
-		if (!is.na(title.bg.color)) title.bg.color <- do.call("process_color", c(list(col=title.bg.color, alpha=title.bg.alpha), gst))
-		if (!is.na(earth.boundary.color)) earth.boundary.color <- do.call("process_color", c(list(col=earth.boundary.color), gst))
-		space.color <- do.call("process_color", c(list(col=space.color), gst))
+		#attr.color <- do.call("process_color", c(list(col=attr.color), pc))
+		bg.color <- do.call("process_color", c(list(col=bg.color), pc))
+		bg.overlay <- do.call("process_color", c(list(col=bg.overlay), pc))
+		
+		if (!is.null(outer.bg.color)) outer.bg.color <- do.call("process_color", c(list(col=outer.bg.color), pc))
+		if (!is.na(legend.bg.color)) legend.bg.color <- do.call("process_color", c(list(col=legend.bg.color, alpha=legend.bg.alpha), pc))
+		if (!is.na(legend.hist.bg.color)) legend.hist.bg.color <- do.call("process_color", c(list(col=legend.hist.bg.color, alpha=legend.hist.bg.alpha), pc))
+		if (!is.na(title.bg.color)) title.bg.color <- do.call("process_color", c(list(col=title.bg.color, alpha=title.bg.alpha), pc))
+		if (!is.na(earth.boundary.color)) earth.boundary.color <- do.call("process_color", c(list(col=earth.boundary.color), pc))
+		space.color <- do.call("process_color", c(list(col=space.color), pc))
+		
+		earth.bounds <- if (is.logical(earth.boundary)) {
+			c(-180, 180, -90, 90)
+		} else {
+			as.vector(extent(earth.boundary))
+		}
+		earth.boundary <- !identical(earth.boundary, FALSE)
 		
 		earth.boundary.lwd <- earth.boundary.lwd * scale
+		frame.lwd <- frame.lwd * scale
+		
+		## overrule margins if interactive
+		if (interactive) {
+			inner.margins <- rep(0, 4)
+			outer.margins <- rep(0, 4)
+			asp <- NA
+		}
+		
 	})	
 
 	if (!is.null(gg)) {
@@ -110,8 +173,8 @@ process_meta <- function(gt, gst, gf, gg, gc, gsb, gcomp, nx, by_names, asp_rati
 			grid.show <- TRUE
 			if (is.na(grid.col)) grid.col <- ifelse(gt$attr.color.light, darker(gt$attr.color, .5), lighter(gt$attr.color, .5))
 			if (is.na(grid.labels.col)) grid.labels.col <- ifelse(gt$attr.color.light, darker(gt$attr.color, .2), lighter(gt$attr.color, .2))
-			grid.col <- do.call("process_color", c(list(col=grid.col, alpha=grid.alpha), gst))
-			grid.labels.col <- do.call("process_color", c(list(col=grid.labels.col), gst))
+			grid.col <- do.call("process_color", c(list(col=grid.col, alpha=grid.alpha), gt$pc))
+			grid.labels.col <- do.call("process_color", c(list(col=grid.labels.col), gt$pc))
 			grid.lwd <- grid.lwd * gt$scale
 		})
 	} else {
@@ -120,20 +183,22 @@ process_meta <- function(gt, gst, gf, gg, gc, gsb, gcomp, nx, by_names, asp_rati
 
 	if (!is.null(gc)) {
 		gc <- within(gc, {
-			if (is.na(credits.col)) credits.col <- gt$attr.color
-			credits.col <- do.call("process_color", c(list(col=credits.col), gst))
+		 	credits.col[is.na(credits.col)] <- gt$attr.color
+			credits.col <- do.call("process_color", c(list(col=credits.col), gt$pc))
 			credits.size <- credits.size * gt$scale
-			credits.fontface[is.na(credits.fontface)] <-gst$fontface
-			credits.fontfamily[is.na(credits.fontfamily)] <-gst$fontfamily
-			credits.show <- TRUE
+			credits.fontface[is.na(credits.fontface)] <-gt$fontface
+			credits.fontfamily[is.na(credits.fontfamily)] <-gt$fontfamily
+			credits.text <- lapply(credits.text, rep, length.out=nx)
+			credits.show <- lapply(credits.text, function(ct) ct!="")
 		})
 	} else {
-		gc <- list(credits.show=FALSE)
+		gc <- list(credits.show=list(rep(FALSE, nx)))
 	}
 
 	if (!is.null(gsb)) {
 		gsb <- within(gsb, {
 			scale.size <- scale.size * gt$scale
+			scale.lwd <- scale.lwd * gt$scale
 			scale.show <- TRUE
 		})
 	} else {
@@ -144,16 +209,18 @@ process_meta <- function(gt, gst, gf, gg, gc, gsb, gcomp, nx, by_names, asp_rati
 	if (!is.null(gcomp)) {
 		gcomp <- within(gcomp, {
 			if (is.na(compass.text.color)) compass.text.color <- gt$attr.color
-			compass.text.color <- do.call("process_color", c(list(col=compass.text.color), gst))
+			compass.text.color <- do.call("process_color", c(list(col=compass.text.color), gt$pc))
 
 			if (is.na(compass.color.dark)) compass.color.dark <- ifelse(gt$attr.color.light, "black", gt$attr.color)
 			if (is.na(compass.color.light)) compass.color.light <- ifelse(gt$attr.color.light, gt$attr.color, "white")
-			compass.color.dark <- do.call("process_color", c(list(col=compass.color.dark), gst))
-			compass.color.light <- do.call("process_color", c(list(col=compass.color.light), gst))
+			compass.color.dark <- do.call("process_color", c(list(col=compass.color.dark), gt$pc))
+			compass.color.light <- do.call("process_color", c(list(col=compass.color.light), gt$pc))
 			
 			compass.fontsize <- compass.fontsize * gt$scale
+			compass.lwd <- compass.lwd * gt$scale
+			
 			compass.show <- TRUE
-			if (is.na(compass.type)) compass.type <- gst$compass.type
+			if (is.na(compass.type)) compass.type <- gt$compass.type
 			if (is.na(compass.size)) compass.size <- switch(compass.type, arrow=2, radar=6, rose=6, 4)
 			compass.nlines <- compass.size + ifelse(compass.show.labels==0, 0, ifelse(compass.show.labels==1, 1, 2))
 		})
@@ -161,9 +228,7 @@ process_meta <- function(gt, gst, gf, gg, gc, gsb, gcomp, nx, by_names, asp_rati
 		gcomp <- list(compass.show=FALSE)
 	}
 	
-	gst$compass.type <- NULL
-	gst$frame.lwd <- gst$frame.lwd * gt$scale
+	gt[c("compass.type", "compass.size")] <- NULL
 	
-	
-	c(gt, gst, gf, gg, gc, gsb, gcomp, shp_info)
+	c(gt, gf, gg, gc, gsb, gcomp, shp_info)
 }

@@ -1,67 +1,15 @@
-process_tm <- function(x, asp_ratio, shp_info) {
-	fill <- NULL; xfill <- NULL; xraster <- NULL
+process_tm <- function(x, asp_ratio, shp_info, interactive) {
+	fill <- NULL; xfill <- NULL; xraster <- NULL; text <- NULL
 	## fill meta info
 	
-	## get tm_layout elements
-	if (!("tm_layout" %in% names(x))) {
-		gt <- tm_layout()$tm_layout
-	} else {
-		gts <- x[names(x)=="tm_layout"]
-		gtsn <- length(gts)
-		gt <- gts[[1]]
-		if (gtsn>1) {
-			extraCall <- character(0)
-			for (i in 2:gtsn) {
-				gt[gts[[i]]$call] <- gts[[i]][gts[[i]]$call]
-				if ("attr.color" %in% gts[[i]]$call) gt[c("earth.boundary.color", "legend.text.color", "title.color")] <- gts[[i]]["attr.color"]
-				extraCall <- c(extraCall, gts[[i]]$call)
-			}
-			gt$call <- c(gt$call, extraCall)
-		}
-	}
+	gt <- preprocess_gt(x, interactive=interactive)
 	
-	## preprocess gt
-	gtnull <- names(which(sapply(gt, is.null)))
-	gt <- within(gt, {
-		if (!"scientific" %in% names(legend.format)) legend.format$scientific <- FALSE
-		if (!"digits" %in% names(legend.format)) legend.format$digits <- NA
-		if (!"text.separator" %in% names(legend.format)) legend.format$text.separator <- "to"
-		if (!"text.less.than" %in% names(legend.format)) legend.format$text.less.than <- "Less than"
-		if (!"text.or.more" %in% names(legend.format)) legend.format$text.or.more <- "or more"
-		
-		# put aes colors in right order and name them
-		if (length(aes.color)==1 && is.null(names(aes.color))) names(aes.color) <- "base"
-		
-		if (!is.null(names(aes.color))) {
-			aes.colors <- c(fill="grey85", borders="grey40", bubbles="blueviolet", dots="black", lines="red", text="black", na="grey60")
-			aes.colors[names(aes.color)] <- aes.color
-		} else {
-			aes.colors <- rep(aes.color, length.out=7)
-			names(aes.colors) <- c("fill", "borders", "bubbles", "dots", "lines", "text", "na")
-		}
-		if (is.na(aes.colors[1])) aes.colors[1] <- "black"
-
-		aes.colors.light <- sapply(aes.colors, function(col) {
-			sum(col2rgb(col) * c(.299, .587, .114)) >= 128
-		})
-
-	})
-	gt[gtnull] <- list(NULL)
-	
-	## get style element
-	styleid <- which(names(x)=="tm_style")[1]
-	if (is.na(styleid)) {
-		gst <- tm_style()$tm_style
-	} else {
-		gst <- x[[styleid]]
-	}
-
 	## get grid element
 	gridid <- which(names(x)=="tm_grid")[1]
 	gg <- x[[gridid]]
 	
 	## get credits, scale_bar and compass element
-	sc_compIDs <- match(c("tm_scale", "tm_compass"), names(x))
+	sc_compIDs <- match(c("tm_scale_bar", "tm_compass"), names(x))
 	gsb <- x[[sc_compIDs[1]]]
 	gcomp <- x[[sc_compIDs[2]]]
 	if (!is.null(gsb)) gsb$scale.id <- sc_compIDs[1]
@@ -70,8 +18,12 @@ process_tm <- function(x, asp_ratio, shp_info) {
 	if (is.na(gcIDs[1])) {
 		gc <- NULL
 	} else {
-		gc <- do.call("mapply", c(x[gcIDs], list(FUN=function(...)unname(c(...)), SIMPLIFY=FALSE)))  
-		gc$credits.position <- unname(lapply(x[gcIDs], "[[", "credits.position"))
+		gc <- do.call("mapply", c(x[gcIDs], list(nm=names(x[gcIDs][[1]]), FUN=function(..., nm) {
+			if (nm %in% c("credits.text", "credits.position")) {
+				unname(list(...))
+			} else unname(c(...))
+		}, SIMPLIFY=FALSE)))  
+		#gc$credits.position <- unname(lapply(x[gcIDs], "[[", "credits.position"))
 		gc$credits.id <- gcIDs
 	}
 	
@@ -82,17 +34,30 @@ process_tm <- function(x, asp_ratio, shp_info) {
 	facet.shp.id <- sapply(facet.id.orig, function(i){tail(which(shape.id.orig<i), 1)})
 	facet.ids <- rep(0, nshps)
 	if (length(facet.shp.id)) facet.ids[facet.shp.id] <- facet.id.orig
+	# create gf for each shape
 	gfs <- lapply(1:nshps, function(i){
 		gf <- if (facet.ids[i]==0) tm_facets()$tm_facets else x[[facet.ids[i]]]
 		gf$shp_name <- x[[shape.id.orig[i]]]$shp_name
 		gf$shp_nr <- ifelse(!is.null(gf$by), i, 0)
-		gf$by <- ifelse(is.null(gf$by), "", gf$by)
+		gf$by <- if (is.null(gf$by)) "" else gf$by
 		gf
 	})
-	gf <- gfs[[1]]
-	x[[shape.id.orig[1]]]$by <- gf$by
-	if (nshps>1) {
-		for (i in 2:nshps) {
+	
+	# get first specified gf
+	startID <- which(vapply(gfs, FUN = function(x)!is.null(x$call), FUN.VALUE = 1)==1)[1]
+	if (is.na(startID)) startID <- 1
+	gf <- gfs[[startID]]
+	if (startID>1) {
+		gf$shp_name <- vapply(1:startID, FUN = function(x) gfs[[x]]$shp_name, FUN.VALUE = character(1))
+		gf$shp_nr <- vapply(1:startID, FUN = function(x) gfs[[x]]$shp_nr, FUN.VALUE = numeric(1))
+	}
+	for (i in 1:startID) {
+		x[[shape.id.orig[i]]]$by <- gfs[[i]]$by
+	}
+	
+	# update with remaining gf's
+	if (nshps>startID) {
+		for (i in (startID+1):nshps) {
 			gf$shp_name <- c(gf$shp_name, gfs[[i]]$shp_name)
 			gf$shp_nr <- c(gf$shp_nr, gfs[[i]]$shp_nr)
 			gf_args <- setdiff(gfs[[i]]$call, "by")
@@ -100,7 +65,6 @@ process_tm <- function(x, asp_ratio, shp_info) {
 			x[[shape.id.orig[i]]]$by <- gfs[[i]]$by
 		}
 	}
-	
 	xnames <- names(x)
 
 	## find tm_grid position
@@ -116,7 +80,7 @@ process_tm <- function(x, asp_ratio, shp_info) {
 			if (length(fillBorderID) >= 2) {
 				belowGridLayers <- belowGridLayers[-fillBorderID[-1]]
 			}
-			sum(!(belowGridLayers %in% c("tm_layout", "tm_style", "tm_facets", "tm_credits", "tm_scale_bar"))) + 1
+			sum(!(belowGridLayers %in% c("tm_layout", "tm_view", "tm_style", "tm_facets", "tm_credits", "tm_compass", "tm_scale_bar"))) + 1
 		}
 	} else {
 		gridGrp <- 0
@@ -124,23 +88,23 @@ process_tm <- function(x, asp_ratio, shp_info) {
 	
 
 	## split x into gmeta and gbody
-	x <- x[!(xnames %in% c("tm_layout", "tm_style", "tm_grid", "tm_facets", "tm_credits", "tm_scale_bar"))]
+	x <- x[!(xnames %in% c("tm_layout", "tm_view", "tm_style", "tm_grid", "tm_facets", "tm_credits", "tm_compass", "tm_scale_bar"))]
 
 	n <- length(x)
 	
 	## split x into clusters
 	shape.id <- which(names(x)=="tm_shape")
-	if (shape.id[1] != 1) stop("First element should be a tm_shape element.")
+	if (shape.id[1] != 1) stop("First element should be a tm_shape element.", call. = FALSE)
 	y <- rep(0, n); y[shape.id] <- 1
 	cluster.id <- cumsum(y)
 	gs <- split(x, cluster.id)
 	
 	nlx <- sapply(gs, length)
-	if (any(nlx==1)) warning("Specify at least one layer after each tm_shape")
+	if (any(nlx==1)) stop("Specify at least one layer after each tm_shape", call. = FALSE)
 	
 	## convert clusters to layers
 	cnlx <- if (nshps==1) 0 else c(0, cumsum(nlx[1:(nshps-1)]-1))
-	gp <- mapply(FUN=process_layers, gs, cnlx, MoreArgs = list(gt=gt, gst=gst, gf=gf), SIMPLIFY = FALSE)
+	gp <- mapply(FUN=process_layers, gs, cnlx, MoreArgs = list(gt=gt, gf=gf, allow.small.mult=!interactive), SIMPLIFY = FALSE)
 	names(gp) <- paste0("tmLayer", 1:length(gp))
 	
 	
@@ -159,39 +123,65 @@ process_tm <- function(x, asp_ratio, shp_info) {
 	
 	## get by vector
 	data_by <- lapply(gp, function(i)i$data_by)
-
-	## for each 'grouped by' shape, where drop.shapes=TRUE, get order ids (used by split_tm) 
-	order_by <- lapply(data_by, function(d) {
-		if (levels(d)[1]=="_NA_" || !gf$drop.shapes) {
+	
+	## for raster: ignore drop.units
+	is_raster <- lapply(gp, function(i)!is.null(i$raster))
+	
+	## for each 'grouped by' shape, where drop.units=TRUE, get order ids (used by split_tm) 
+	order_by <- mapply(function(d, isr) {
+		if (levels(d)[1]=="_NA_" || !gf$drop.units || isr) {
 			NULL
 		} else {
 			lapply(1:nlevels(d), function(i)which(as.numeric(d)==i))
 		}
-	})
+	}, data_by, is_raster, SIMPLIFY=FALSE)
 	
 	## check if by is consistent among groups
 	by_counts <- sapply(data_by, nlevels)
 	if (sum(by_counts>1)>1) {
 		by_counts_pos <- by_counts[by_counts>1]
-		if (any(by_counts_pos[-1]!=by_counts_pos[1])) stop("Number of facets defined by the 'by' argument of tm_facets are different for the groups.")
+		if (any(by_counts_pos[-1]!=by_counts_pos[1])) stop("Number of facets defined by the 'by' argument of tm_facets are different for the groups.", call. = FALSE)
+		
+	}
+	
+	if (any(by_counts>1)) {
+		# get panel names
+		panel.names <- gp[[which(by_counts>1)[1]]]$panel.names
+	} else {
+		panel.names <- NA
 	}
 
+	## check number of levels for two variables and override gf
+	ncols <- sapply(gp, function(i)i$ncol)
+	nrows <- sapply(gp, function(i)i$nrow)
+	if (any(!is.na(ncols))) {
+		if (!all(na.omit(ncols)==na.omit(ncols)[[1]]) | !all(na.omit(nrows)==na.omit(nrows)[[1]])) stop("Inconsistent levels of the 'by' argument of tm_facets.", call.=FALSE)
+		gf$ncol <- na.omit(ncols)[1]
+		gf$nrow <- na.omit(nrows)[1]
+	}
+	
+	
 	## determine number of small multiples
 	nx <- max(sapply(gp, function(x){
 		max(sapply(x$varnames, length))
 	}))
 
-	## get by names
-	by_names_list <- lapply(gp, function(gpl) gpl$varnames$by)
-	by_names_specified <- !sapply(by_names_list, is.na)
-	by_names <- if (any(by_names_specified)) by_names_list[[which(by_names_specified)[1]]] else NA
-	
+	any.legend <- any(vapply(gp, function(x)x$any.legend, logical(1)))
+
 	## process meta
-	gmeta <- process_meta(gt, gst, gf, gg, gc, gsb, gcomp, nx, by_names, asp_ratio, shp_info)
+	gmeta <- process_meta(gt, gf, gg, gc, gsb, gcomp, nx, panel.names, asp_ratio, shp_info, any.legend, interactive)
+	panel.mode <- if (!gmeta$panel.show) {
+		"none"
+	} else if (is.list(panel.names)) {
+		"both"
+	} else "one"
+	
+	if (panel.mode!="none") gmeta$title <- rep("", nx)
 	
 	## split into small multiples
 	gps <- split_tm(gp, nx, order_by)
 	scale <- gmeta$scale
+	
 	gps <- mapply(function(x, i){
 		x <- lapply(x, function(xx) {
 			within(xx, {
@@ -221,6 +211,9 @@ process_tm <- function(x, asp_ratio, shp_info) {
 				
 				if (!is.null(text)) {
 					text.size <- text.size * scale
+					text.col.legend.misc$text.max.size <- text.col.legend.misc$text.max.size * scale
+					text.size.legend.misc$legend.sizes <- text.size.legend.misc$legend.sizes * scale
+					
 				}
 
 
@@ -230,11 +223,27 @@ process_tm <- function(x, asp_ratio, shp_info) {
 
 			})
 		})
-		
+
+		# process credits text per facet
+		gmeta$credits.show <- sapply(gmeta$credits.show, "[[", i)
+		if (!is.null(gmeta$credits.text)) gmeta$credits.text <- sapply(gmeta$credits.text, "[[", i)
+		gmeta[c("credits.text", "credits.size", "credits.col", "credits.alpha", "credits.align",
+				"credits.bg.color", "credits.bg.alpha", "credits.fontface", "credits.fontfamily",
+				"credits.position", "credits.id")] <- lapply(
+					gmeta[c("credits.text", "credits.size", "credits.col", "credits.alpha", "credits.align",
+							"credits.bg.color", "credits.bg.alpha", "credits.fontface", "credits.fontfamily",
+							"credits.position", "credits.id")],
+					function(gm) {
+						gm[gmeta$credits.show]	
+					})
+		gmeta$credits.show <- any(gmeta$credits.show)
 		x$tm_layout <- gmeta
 		x$tm_layout$title <- x$tm_layout$title[i]
 		x
 	}, gps, 1:nx, SIMPLIFY=FALSE)
-	
+
+	#gmeta$panel.names <- panel.names
+	gmeta$panel.mode <- panel.mode
+
 	list(gmeta=gmeta, gps=gps, nx=nx, data_by=data_by)
 }

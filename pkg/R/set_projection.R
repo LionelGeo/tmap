@@ -8,47 +8,11 @@
 #' projection information if this is missing. The function \code{get_projection}
 #' is used to get the projection information.
 #' 
+#' For raster objects, the projection method is based on the type of data. For numeric layers, the bilinear method is used, and for categorical layers the nearest neighbor. See \code{\link[raster:projectRaster]{projectRaster}} for details.
+#' 
 #' @param shp shape object of class \code{\link[sp:Spatial]{Spatial}} or
-#'   \code{\link[raster:Raster-class]{Raster}}
-#' @param projection character that determines the new projection. Either a
-#'   \code{PROJ.4} character string or one of the following shortcuts: 
-#'   \describe{ \item{\code{"longlat"}}{Not really a projection, but a plot of
-#'   the longitude-latitude coordinates (WGS84 datum).} 
-#'   \item{\code{"wintri"}}{Winkel Tripel (1921). Popular projection that is
-#'   useful in world maps. It is the standard of world maps made by the National
-#'   Geographic Society. Type: compromise} \item{\code{"robin"}}{Robinson
-#'   (1963). Another popular projection for world maps. Type: compromise} 
-#'   \item{\code{"eck4"}}{Eckert IV (1906). Projection useful for world maps.
-#'   Area sizes are preserved, which makes it particularly useful for truthful
-#'   choropleths. Type: equal-area} \item{\code{"hd"}}{Hobo-Dyer (2002). Another
-#'   projection useful for world maps in which area sizes are preserved. Type:
-#'   equal-area} \item{\code{"gall"}}{Gall (Peters) (1855). Another projection
-#'   useful for world maps in which area sizes are preserved. Type: equal-area} 
-#'   \item{\code{"merc"}}{Mercator (1569). Projection in which shapes are
-#'   locally preserved. However, areas close to the poles are inflated. Google
-#'   Maps uses a close variant of the Mercator. Type: conformal} 
-#'   \item{\code{"utmXX(s)"}}{Universal Transverse Mercator. Set of 60
-#'   projections where each projection is a traverse mercator optimized for a 6
-#'   degree longitude range. These ranges are called UTM zones. Zone \code{01}
-#'   covers -180 to -174 degrees (West) and zone \code{60} 174 to 180 east.
-#'   Replace XX in the character string with the zone number. For southern
-#'   hemisphere, add \code{"s"}. So, for instance, the Netherlands is
-#'   \code{"utm31"} and New Zealand is \code{"utm59s"}} 
-#'   \item{\code{"mill"}}{Miller (1942). Projetion based on Mercator, in which
-#'   poles are displayed. Type: compromise} \item{\code{"eqc0"}}{Equirectangular
-#'   (120). Projection in which distances along meridians are conserved. The
-#'   equator is the standard parallel. Also known as Plate Carr\'ee. Type:
-#'   equidistant} \item{\code{"eqc30"}}{Equirectangular (120). Projection in
-#'   which distances along meridians are conserved. The latitude of 30 is the
-#'   standard parallel. Type: equidistant} \item{\code{"eqc45"}}{Equirectangular
-#'   (120). Projection in which distances along meridians are conserved. The
-#'   latitude of 45 is the standard parallel. Also known as Gall isographic.
-#'   Type: equidistant} \item{\code{"rd"}}{Rijksdriehoekstelsel. Triangulation
-#'   coordinate system used in the Netherlands.}} See
-#'   \url{http://en.wikipedia.org/wiki/List_of_map_projections} for a overview
-#'   of projections. See \url{http://trac.osgeo.org/proj/} for the \code{PROJ.4}
-#'   project home page. An extensive list of \code{PROJ.4} codes can be created
-#'   with rgdal's \code{\link[rgdal:make_EPSG]{make_EPSG}}. This argument is
+#'   \code{\link[raster:Raster-class]{Raster}} (see details).
+#' @param projection character that determines the new projection. Either a \code{PROJ.4} character string or a shortcut. See \code{\link{get_proj4}} for a list of shortcut values. This argument is
 #'   only used to transform the \code{shp}. Use \code{current.projection} to
 #'   specify the current projection of \code{shp}.
 #' @param current.projection the current projection of \code{shp}. Only use this
@@ -59,7 +23,8 @@
 #' @name set_projection
 #' @rdname set_projection
 #' @import sp
-#' @import raster
+#' @importFrom raster projectRaster
+#' @importFrom rgdal getPROJ4VersionInfo
 #' @return \code{set_projection} returns a (transformed) shape object with
 #'   updated projection information. \code{get_projection} returns the
 #'   \code{PROJ.4} character string of \code{shp}.
@@ -68,45 +33,106 @@ set_projection <- function(shp, projection=NULL, current.projection=NULL, overwr
 	shp.name <- deparse(substitute(shp))
 	shp.proj <- proj4string(shp)
 
-	current.proj4 <- get_proj4_code(current.projection)
+	current.proj4 <- get_proj4(current.projection)
 
 	if (is.na(shp.proj)) {
 		if (missing(current.projection) || is.na(current.projection)) {
 			stop("Currect projection of shape object unknown. Please specify the argument current.projection. The value \"longlat\", which stands for Longitude-latitude (WGS84), is most commonly used.")
 		} else {
-			shp@proj4string <- CRS(current.proj4)
+			if (inherits(shp, "Spatial")) {
+				shp@proj4string <- CRS(current.proj4)
+			} else {
+				shp@crs <- CRS(current.proj4) 
+			}
+			current.projection <- current.proj4
 		}
 	} else {
 		if (!missing(current.projection)) {
 			if (current.proj4==shp.proj) {
-				warning(paste("Current projection of", shp.name, "already known."))
-			}else {
+				warning("Current projection of ", shp.name, " already known.", call. = FALSE)
+			} else {
 				if (overwrite.current.projection) {
-					warning(paste("Current projection of", shp.name, "differs from", current.projection, ", but is overwritten."))
-					shp@proj4string <- CRS(current.proj4)
+					warning("Current projection of ", shp.name, " differs from ", current.projection, ", but is overwritten.", call. = FALSE)
+					if (inherits(shp, "Spatial")) {
+						shp@proj4string <- CRS(current.proj4)
+					} else {
+						shp@crs <- CRS(current.proj4) 
+					}
+					
 				} else {
-					stop(paste(shp.name, "already has projection:", shp.proj, "This is different from the specified current projection", current.projection, ". If the specified projection is correct, use overwrite.current.projection=TRUE."))
+					stop(shp.name, " already has projection: ", shp.proj, ". This is different from the specified current projection ", current.projection, ". If the specified projection is correct, use overwrite.current.projection=TRUE.", call. = FALSE)
 				}
 			} 
+		} else {
+			current.proj4 <- shp.proj
 		}
 	}
 	
+
 	if (!missing(projection)) {
-		proj4 <- get_proj4_code(projection)
+		proj4 <- get_proj4(projection)
+		PROJ4_version_nr <- get_proj4_version()
+		
+		if (length(grep("+proj=wintri", current.proj4, fixed = TRUE)) && PROJ4_version_nr < 491) {
+			stop("Unable to reproject a shape from the Winkel Tripel projection with PROJ.4 version < 4.9.1")
+		}	
 		
 		cls <- class(shp)
 		
-		if (inherits(shp, "SpatialGrid")) {
-			shp <- as(shp, "RasterBrick")
+		if (inherits(shp, c("SpatialGrid", "SpatialPixels"))) {
+			shp <- brick(shp)
+			recast <- TRUE
+		} else {
+			recast <- FALSE
 		}
 		
 		if (inherits(shp, "Raster")) {
-			shp <- suppressWarnings(projectRaster(shp, crs=proj4))
+			raster_data <- get_raster_data(shp)
+			has_color_table <- (length(colortable(shp))>0)
+			
+			# get factor levels (to be restored later)
+			lvls <- lapply(raster_data, levels)
+			# override factor levels with colortable values
+			if (has_color_table) {
+				lvls <- lapply(lvls, function(l) colortable(shp))
+			}
+			isnum <- sapply(lvls, is.null)
+			new_ext <- suppressWarnings(projectExtent(shp, crs = CRS(proj4)))
+			if (any(isnum) && !all(isnum)) {
+				shp_num <- raster::subset(shp, subset=which(isnum))
+				shp_cat <- raster::subset(shp, subset=which(!isnum))
+				shp_num2 <- suppressWarnings(projectRaster(shp_num, to=new_ext, crs=proj4, method="bilinear"))
+				shp_cat2 <- suppressWarnings(projectRaster(shp_cat, to=new_ext, crs=proj4, method="ngb"))
+				
+				# restore order
+				o <- order(c(which(isnum), which(!isnum)))
+				rlayers <- c(lapply(1:nlayers(shp_num), function(i) raster(shp_num2, layer=i)),
+							 lapply(1:nlayers(shp_cat), function(i) raster(shp_cat2, layer=i)))[o]
+				shp <- do.call("brick", rlayers)
+			} else if (all(isnum)) {
+				shp <- suppressWarnings(projectRaster(shp, to=new_ext, crs=proj4, method="bilinear"))
+			} else {
+				shp <- suppressWarnings(projectRaster(shp, to=new_ext, crs=proj4, method="ngb"))
+			}
+			
+			new_raster_data <- as.data.frame(mapply(function(d, l) {
+				if (!is.null(l) && !is.factor(d)) factor(d, levels=1:length(l), labels=l) else d
+			}, get_raster_data(shp), lvls, SIMPLIFY=FALSE))
+			
+			if (any(!isnum)) {
+				shp@data@isfactor <- !isnum
+				dfs <- mapply(function(nm, lv) {
+					df <- data.frame(ID=1:length(lv), levels=factor(lv, levels=lv))
+					if (cls=="RasterBrick") names(df)[2] <- nm
+					df
+				}, names(which(!isnum)), lvls[!isnum], SIMPLIFY=FALSE)
+				shp@data@attributes <- dfs
+			}
 		} else {
 			shp <- spTransform(shp, CRS(proj4))
 		}
 
-		if (class(shp) != cls) {
+		if (recast) {
 			shp <- as(shp, cls)
 		}
 	}
@@ -114,6 +140,12 @@ set_projection <- function(shp, projection=NULL, current.projection=NULL, overwr
 	shp
 }
 
+get_proj4_version <- function() {
+	PROJ4_version <- rgdal::getPROJ4VersionInfo()
+	vid <- gregexpr("PJ_VERSION: ", PROJ4_version, fixed = TRUE)[[1]][1] + 12
+	as.integer(substr(PROJ4_version, vid, nchar(PROJ4_version)-1))
+}
+	
 
 #' @name get_projection
 #' @rdname set_projection

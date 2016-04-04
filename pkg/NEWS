@@ -1,16 +1,44 @@
-version 1.1 (under construction)
-- added interactive SVG, that can be opend in RStudio (see itmap)
+version 1.4
+- [!] interactive mapping added. Now, tmap has two modes: "plot" (graphics device) and "view" (interactive viewer, which is a leaflet widget)
+- [!] facets (small multiples) improved: group by two variables possible, panel layout added, missing data can be shown separately
+- added geocode_OSM, a function to find coordinates
+- improved set_projection for raster objects
+- added double_line and offset_line
+- added insets option in save_tmap
+- improved default settings for contrast arugment regarding seq and div palettes
+- improved automatic positions of legend and map attributes (more specifically, legend snaps to righthand-side without need to adjust legend.width, and legend and attributes position improved when double frame is enabled)
+- improved tm_layouts's design.mode output
+- lwd parameter added to tm_scale_bar and tm_compass
+- fixed bb bug
+
+version 1.2-1
+- fixed bug with PROJ.4 version < 4.9.1
+- improved error messages
+- rd projection reset to +init=epsg:28992, since the latter now has a +towgs item
+- fixed bug of print.tmap returned object
+
+version 1.2
 - added read_osm, a function to read Open Street Map data
 - added bb, a handy bounding box function
-- added tm_style. See tm_style_classic for classic, sepia-colored maps
+- added layout themes with tm_style and tm_format
+- added automatic text labeling
+- added interactive SVG, that can be opend in RStudio (see itmap)
 - added map compass (tm_compass)
+- added text aesthetics size and col
 - added automatic map coloring
+- added earth boundary, which is useful for projected world maps
+- added warped grid lines (e.g. long-lat lines can be shown in projected maps)
+- added new color scale modes (enabled with style="cat", "cont", and "order")
 - added save_tmap
-- improved automatic layout regarding legend and map attributes
+- added smooth_map, smooth_raster_cover, sample_dots, points_to_raster and poly_to_raster
+- added read_GPX
+- improved automatic layout regarding title, legend, and map attributes
 - layer arguments, e.g. palette, can take multiple values for small multiples
 - improved grid lines (labels can also be placed outside frame)
 - arguments free.coords and drop.shapes of tm_facets working
+- updated examples and vignette
 - fixed viewport bug
+- see ?tmap for a structured overview of all tmap functions
 
 version 1.0
 - added tm_credits and tm_scale_bar
